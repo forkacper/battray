@@ -11,7 +11,7 @@ mice and keyboards, Keychron keyboards, PlayStation DualSense and DualShock 4,
 Xbox controllers and Bluetooth devices, all in one place, without G HUB, Steam or
 any other vendor software.
 
-![battray in the Windows tray: keyboard at 38 % and mouse at 54 %](docs/tray.png)
+<img src="docs/tray.png" width="600" alt="battray tray icons: keyboard at 38 %, mouse at 54 %, controller at 71 % and charging">
 
 ## Features
 
