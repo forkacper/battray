@@ -3,6 +3,7 @@
 //! To add a device family: create a module, implement [`Provider`] for it and
 //! register it in [`providers`].
 
+mod bluetooth;
 mod dualsense;
 mod logitech;
 
@@ -59,5 +60,6 @@ pub fn providers() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(logitech::Logitech::default()),
         Box::new(dualsense::DualSense::default()),
+        Box::new(bluetooth::Bluetooth),
     ]
 }
