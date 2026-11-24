@@ -14,9 +14,10 @@ use windows_sys::Win32::Devices::DeviceAndDriverInstallation::{
     CM_LOCATE_DEVNODE_NORMAL, CM_Locate_DevNodeW, CR_BUFFER_SMALL, CR_SUCCESS,
 };
 use windows_sys::Win32::Devices::HumanInterfaceDevice::{
-    HIDD_ATTRIBUTES, HIDP_CAPS, HIDP_STATUS_SUCCESS, HidD_FlushQueue, HidD_FreePreparsedData,
-    HidD_GetAttributes, HidD_GetHidGuid, HidD_GetManufacturerString, HidD_GetPreparsedData,
-    HidD_GetProductString, HidP_GetCaps, PHIDP_PREPARSED_DATA,
+    HIDD_ATTRIBUTES, HIDP_CAPS, HIDP_REPORT_TYPE, HIDP_STATUS_SUCCESS, HIDP_VALUE_CAPS,
+    HidD_FlushQueue, HidD_FreePreparsedData, HidD_GetAttributes, HidD_GetHidGuid,
+    HidD_GetManufacturerString, HidD_GetPreparsedData, HidD_GetProductString, HidP_Feature,
+    HidP_GetCaps, HidP_GetUsageValue, HidP_GetValueCaps, HidP_Input, PHIDP_PREPARSED_DATA,
 };
 use windows_sys::Win32::Devices::Properties::{DEVPKEY_Device_InstanceId, DEVPROPTYPE};
 use windows_sys::Win32::Foundation::{
@@ -266,10 +267,13 @@ pub struct Device {
 }
 
 impl Device {
-    /// Opens a collection for report I/O, falling back to read-only access.
+    /// Opens a collection for report I/O, falling back to read-only access and then to
+    /// no access at all. The last still allows feature reports on collections that
+    /// Windows keeps for itself, such as keyboards and mice.
     pub fn open(info: &DeviceInfo) -> io::Result<Self> {
         let handle = open_handle(&info.path, GENERIC_READ | GENERIC_WRITE)
-            .or_else(|_| open_handle(&info.path, GENERIC_READ))?;
+            .or_else(|_| open_handle(&info.path, GENERIC_READ))
+            .or_else(|_| open_handle(&info.path, 0))?;
         Ok(Self {
             handle,
             event: new_event()?,
@@ -339,6 +343,13 @@ impl Device {
         }
     }
 
+    /// The parsed report descriptor, used to locate values inside reports.
+    pub fn descriptor(&self) -> Option<Descriptor> {
+        let mut data: PHIDP_PREPARSED_DATA = 0;
+        // SAFETY: the handle is an open HID handle and `data` is writable.
+        unsafe { HidD_GetPreparsedData(self.handle.0, &mut data) }.then_some(Descriptor(data))
+    }
+
     /// Runs one overlapped operation and waits for it. Returns the transferred
     /// byte count, or `None` if it timed out and was cancelled.
     fn overlapped(
@@ -371,6 +382,113 @@ impl Device {
             } else {
                 Ok(None)
             }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ReportKind {
+    Input,
+    Feature,
+}
+
+impl ReportKind {
+    fn raw(self) -> HIDP_REPORT_TYPE {
+        match self {
+            Self::Input => HidP_Input,
+            Self::Feature => HidP_Feature,
+        }
+    }
+}
+
+/// Where a value with a given usage lives, as declared by the report descriptor.
+#[derive(Debug, Clone, Copy)]
+pub struct ValueField {
+    pub kind: ReportKind,
+    pub report_id: u8,
+    pub usage_page: u16,
+    pub usage: u16,
+    pub link_collection: u16,
+    pub logical_min: i32,
+    pub logical_max: i32,
+}
+
+/// Parsed report descriptor (HID "preparsed data") of an open collection.
+pub struct Descriptor(PHIDP_PREPARSED_DATA);
+
+impl Drop for Descriptor {
+    fn drop(&mut self) {
+        // SAFETY: the data came from HidD_GetPreparsedData and is freed exactly once.
+        unsafe { HidD_FreePreparsedData(self.0) };
+    }
+}
+
+impl Descriptor {
+    /// Every value field with `usage_page`/`usage` in reports of `kind`.
+    pub fn find_values(&self, kind: ReportKind, usage_page: u16, usage: u16) -> Vec<ValueField> {
+        let mut caps = HIDP_CAPS::default();
+        // SAFETY: `self.0` is valid preparsed data and `caps` is writable.
+        if unsafe { HidP_GetCaps(self.0, &mut caps) } != HIDP_STATUS_SUCCESS {
+            return Vec::new();
+        }
+        let mut count = match kind {
+            ReportKind::Input => caps.NumberInputValueCaps,
+            ReportKind::Feature => caps.NumberFeatureValueCaps,
+        };
+        if count == 0 {
+            return Vec::new();
+        }
+        let mut values = vec![HIDP_VALUE_CAPS::default(); usize::from(count)];
+        // SAFETY: `values` holds `count` entries, as the API is told.
+        if unsafe { HidP_GetValueCaps(kind.raw(), values.as_mut_ptr(), &mut count, self.0) }
+            != HIDP_STATUS_SUCCESS
+        {
+            return Vec::new();
+        }
+        values.truncate(usize::from(count));
+        values
+            .iter()
+            .filter(|v| v.UsagePage == usage_page && covers(v, usage))
+            .map(|v| ValueField {
+                kind,
+                report_id: v.ReportID,
+                usage_page,
+                usage,
+                link_collection: v.LinkCollection,
+                logical_min: v.LogicalMin,
+                logical_max: v.LogicalMax,
+            })
+            .collect()
+    }
+
+    /// Extracts `field` from a report of the matching kind and ID (with report ID byte).
+    pub fn value(&self, field: &ValueField, report: &[u8]) -> Option<u32> {
+        let mut value = 0u32;
+        let len = u32::try_from(report.len()).ok()?;
+        // SAFETY: `report` is readable for `len` bytes and `self.0` is valid preparsed data.
+        let status = unsafe {
+            HidP_GetUsageValue(
+                field.kind.raw(),
+                field.usage_page,
+                field.link_collection,
+                field.usage,
+                &mut value,
+                self.0,
+                report.as_ptr(),
+                len,
+            )
+        };
+        (status == HIDP_STATUS_SUCCESS).then_some(value)
+    }
+}
+
+fn covers(cap: &HIDP_VALUE_CAPS, usage: u16) -> bool {
+    // SAFETY: both union variants are plain u16 fields; `IsRange` says which one is valid.
+    unsafe {
+        if cap.IsRange {
+            (cap.Anonymous.Range.UsageMin..=cap.Anonymous.Range.UsageMax).contains(&usage)
+        } else {
+            cap.Anonymous.NotRange.Usage == usage
         }
     }
 }
