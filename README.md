@@ -1,4 +1,9 @@
-# battray
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo-dark.png">
+    <img src="docs/logo-light.png" height="72" alt="battray">
+  </picture>
+</h1>
 
 [![Latest release](https://img.shields.io/github/v/release/forkacper/battray)](https://github.com/forkacper/battray/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/forkacper/battray/total)](https://github.com/forkacper/battray/releases)
