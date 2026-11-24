@@ -5,6 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- DualShock 4 next to DualSense, over USB, Bluetooth and the Sony wireless adapter.
+- Xbox controllers and other XInput gamepads.
+- Any HID device that reports the standard Battery Strength usage.
+- The Keychron firmware patch is built for every wireless Keychron keyboard on the
+  shared wireless code (184 variants), released as `keychron-battray-firmware.zip`.
+- Issue templates for device reports and bugs.
+
+### Changed
+
+- Keychron keyboards are remembered across restarts, so one that is asleep at
+  start-up still shows up.
+- The firmware moved from `firmware/keychron-k3-max` to `firmware/keychron`.
+
 ### Fixed
 
 - Keychron keyboards no longer show up as "Keychron Link" when a query goes

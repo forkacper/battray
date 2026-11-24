@@ -5,7 +5,8 @@ mice, keyboards and gamepads.
 
 - Native Win32 in Rust: a single small `.exe`, a few MB of RAM, idle between polls.
 - No vendor software needed (G HUB, Steam), though it runs fine alongside it.
-- Supports Logitech mice, DualSense, Keychron K3 Max and Bluetooth devices. See
+- Supports Logitech HID++ devices, PlayStation and Xbox controllers, Keychron
+  wireless keyboards, Bluetooth devices and standard HID batteries. See
   [supported devices](DEVICES.md).
 
 Download `battray.exe` from [Releases](https://github.com/forkacper/battray/releases).
