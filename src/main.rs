@@ -14,6 +14,7 @@ mod icon;
 mod logger;
 mod tray;
 mod util;
+mod window;
 mod worker;
 
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
@@ -23,12 +24,16 @@ use windows_sys::Win32::UI::HiDpi::{
 };
 
 fn main() {
+    let in_tray = std::env::args().skip(1).any(|a| a == config::TRAY_FLAG);
     let name = util::wide("Local\\battray-single-instance");
     // SAFETY: `name` is null-terminated. The mutex handle is intentionally kept open
     // for the lifetime of the process.
     let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
     // SAFETY: reads the calling thread's last error code right after CreateMutexW.
     if !mutex.is_null() && unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
+        if !in_tray {
+            tray::activate_running_instance();
+        }
         return;
     }
     // SAFETY: called once at start-up, before any window exists. Crisp icons at any scale.
@@ -38,5 +43,5 @@ fn main() {
     logger::init(&data_dir.join("battray.log"));
     log!("battray {} starting", env!("CARGO_PKG_VERSION"));
     let cfg = config::Config::load(&data_dir.join("config.ini"));
-    std::process::exit(tray::run(cfg, data_dir));
+    std::process::exit(tray::run(cfg, data_dir, !in_tray));
 }

@@ -45,6 +45,15 @@ impl Default for Config {
 
 pub const INTERVAL_CHOICES: [u64; 4] = [30, 60, 300, 900];
 
+/// "Every minute", "Every 5 minutes", "Every 30 seconds".
+pub fn interval_label(secs: u64) -> String {
+    match secs {
+        60 => "Every minute".to_owned(),
+        s if s % 60 == 0 && s > 60 => format!("Every {} minutes", s / 60),
+        s => format!("Every {s} seconds"),
+    }
+}
+
 impl Config {
     /// Loads the config, falling back to defaults for a missing file or unknown values.
     pub fn load(path: &Path) -> Self {
@@ -129,15 +138,34 @@ fn exe_path() -> Option<PathBuf> {
 
 const RUN_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Run";
 const RUN_VALUE: &str = "battray";
+/// Command-line flag for starting in the tray without opening the window.
+pub const TRAY_FLAG: &str = "--tray";
 
 /// Whether the Run entry points at this executable.
 pub fn autostart_enabled() -> bool {
     let (Some(exe), Some(current)) = (exe_path(), read_run_value()) else {
         return false;
     };
-    current
-        .trim_matches('"')
-        .eq_ignore_ascii_case(&exe.to_string_lossy())
+    run_target(&current).eq_ignore_ascii_case(&exe.to_string_lossy())
+}
+
+/// The program path of a Run command line, without quotes or arguments.
+fn run_target(command: &str) -> &str {
+    match command.strip_prefix('"') {
+        Some(rest) => rest.split_once('"').map_or(rest, |(path, _)| path),
+        None => command.split_once(' ').map_or(command, |(path, _)| path),
+    }
+}
+
+/// Adds the tray flag to a Run entry written by an older version, so starting
+/// with Windows does not open the window.
+pub fn upgrade_autostart() {
+    if autostart_enabled()
+        && read_run_value().is_some_and(|v| !v.contains(TRAY_FLAG))
+        && let Err(e) = set_autostart(true)
+    {
+        crate::log!("cannot update autostart: {e}");
+    }
 }
 
 fn read_run_value() -> Option<String> {
@@ -165,7 +193,7 @@ pub fn set_autostart(enable: bool) -> std::io::Result<()> {
     let name = wide(RUN_VALUE);
     let status = if enable {
         let exe = exe_path().ok_or_else(std::io::Error::last_os_error)?;
-        let value = wide(&format!("\"{}\"", exe.display()));
+        let value = wide(&format!("\"{}\" {TRAY_FLAG}", exe.display()));
         let bytes = (value.len() * 2) as u32;
         // SAFETY: strings are null-terminated and `bytes` matches the size of `value`.
         unsafe {
@@ -209,6 +237,23 @@ mod tests {
         assert_eq!(loaded.interval_secs, 300);
         assert!(!loaded.notify_low);
         assert_eq!(loaded.low_threshold, 15);
+    }
+
+    #[test]
+    fn run_target_strips_quotes_and_arguments() {
+        assert_eq!(
+            run_target(r#""C:\a b\battray.exe" --tray"#),
+            r"C:\a b\battray.exe"
+        );
+        assert_eq!(run_target(r#""C:\battray.exe""#), r"C:\battray.exe");
+        assert_eq!(run_target(r"C:\battray.exe --tray"), r"C:\battray.exe");
+    }
+
+    #[test]
+    fn interval_labels() {
+        assert_eq!(interval_label(30), "Every 30 seconds");
+        assert_eq!(interval_label(60), "Every minute");
+        assert_eq!(interval_label(900), "Every 15 minutes");
     }
 
     #[test]

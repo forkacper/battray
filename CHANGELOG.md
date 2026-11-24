@@ -5,6 +5,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Settings window with the device list and all settings, including the low battery
+  threshold. It opens when battray is started by hand or the tray icon is clicked,
+  and closing or minimising it keeps battray running in the tray.
+- Starting battray while it is already running opens the window of the running one.
+
+### Changed
+
+- Clicking the tray icon opens the settings window; right-click shows the menu.
+- Start with Windows starts battray in the tray, without the window. Existing
+  autostart entries are updated on the next start.
+
 ## [0.3.1] - 2026-11-24
 
 ### Added

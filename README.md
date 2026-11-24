@@ -26,6 +26,8 @@ any other vendor software.
   2.4 GHz receivers, Bluetooth and USB.
 - **Your choice of tray display**: one icon with the lowest battery, one icon per
   device, or a single device you pick.
+- **Small settings window**: all devices and settings in one place. Closing it keeps
+  battray running in the tray.
 - **Colour-coded levels**: green, amber and red, blue while charging.
 - **Low battery alerts**, adjustable refresh interval and start with Windows.
 - **Private**: no network access, no telemetry, no account.
@@ -46,8 +48,11 @@ See [DEVICES.md](DEVICES.md) for details and which devices are confirmed on real
 ## Install
 
 1. Download `battray.exe` from the [latest release](https://github.com/forkacper/battray/releases/latest).
-2. Run it. The battery level shows up in the tray; right-click it for settings.
-3. Optionally enable **Start with Windows** in the tray menu.
+2. Run it. A small window lists your devices and settings, and the battery level
+   shows up in the tray. Close the window and battray keeps running there.
+3. Optionally enable **Start with Windows**. battray then starts straight in the tray.
+
+Click the tray icon to open the window again, or right-click it for a quick menu.
 
 Or with [Scoop](https://scoop.sh):
 
