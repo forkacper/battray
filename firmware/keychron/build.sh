@@ -6,6 +6,9 @@
 #   build.sh --list          print the supported boards as a JSON array
 #   build.sh [board ...]     build the given boards (default: all), e.g. k3_max
 #
+# Variants whose stock firmware does not build either are skipped and listed in
+# out/skipped-<board>.txt.
+#
 # Building needs the QMK build environment, e.g. the ghcr.io/qmk/qmk_cli image.
 set -eu
 
@@ -58,7 +61,16 @@ for board in "$@"; do
         else
             cp "$here/keymap/config.h" "$keymaps/battray/"
         fi
-        make -j"$(nproc)" "$variant:battray"
+        if ! make -j"$(nproc)" "$variant:battray"; then
+            # Some variants are broken in Keychron's own tree; skip those, but fail
+            # if only the patched build breaks.
+            if make -j"$(nproc)" "$variant:keychron" >/dev/null 2>&1; then
+                echo "error: $variant builds stock but not with battray" >&2
+                exit 1
+            fi
+            echo "$variant: Keychron's stock firmware for it does not build" | tee -a "$here/out/skipped-$board.txt"
+            continue
+        fi
         cp "$(echo "$variant" | tr / _)_battray".* "$here/out/"
     done
 done

@@ -62,6 +62,10 @@ jobs:
       # The app workflow may have created the release already.
       - name: Attach to release
         run: |
+          if ls keychron/skipped-*.txt >/dev/null 2>&1; then
+            cat keychron/skipped-*.txt > keychron/SKIPPED.txt
+            rm keychron/skipped-*.txt
+          fi
           (cd keychron && zip -q ../keychron-battray-firmware.zip *)
           gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes || true
           gh release upload "${{ github.ref_name }}" keychron-battray-firmware.zip --repo "${{ github.repository }}" --clobber
