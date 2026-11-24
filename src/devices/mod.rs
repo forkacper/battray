@@ -4,6 +4,7 @@
 //! register it in [`providers`].
 
 mod bluetooth;
+mod hid_battery;
 mod keychron;
 mod logitech;
 mod playstation;
@@ -65,5 +66,6 @@ pub fn providers() -> Vec<Box<dyn Provider>> {
         Box::new(playstation::PlayStation::default()),
         Box::new(xinput::XInput),
         Box::new(bluetooth::Bluetooth),
+        Box::new(hid_battery::HidBattery::default()),
     ]
 }
