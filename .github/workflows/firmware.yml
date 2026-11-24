@@ -1,0 +1,26 @@
+name: Firmware
+
+on:
+  push:
+    branches: [main]
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+  pull_request:
+    paths: ["firmware/**", ".github/workflows/firmware.yml"]
+  workflow_dispatch:
+
+jobs:
+  keychron-k3-max:
+    runs-on: ubuntu-latest
+    container: ghcr.io/qmk/qmk_cli
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build firmware
+        run: sh firmware/keychron-k3-max/build.sh
+        env:
+          WORK: /tmp/keychron
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: keychron-k3-max-firmware
+          path: firmware/keychron-k3-max/out/*.bin
