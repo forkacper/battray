@@ -7,6 +7,7 @@ mice, keyboards and gamepads.
 - No vendor software needed (G HUB, Steam), though it runs fine alongside it.
 - Supports Logitech HID++ devices (e.g. PRO X SUPERLIGHT 2), DualSense, and any Bluetooth
   device that reports its battery to Windows.
+- Keychron K3 Max on the 2.4 GHz dongle with the [firmware patch](firmware/keychron-k3-max).
 
 Download `battray.exe` from [Releases](https://github.com/forkacper/battray/releases).
 
@@ -17,4 +18,4 @@ one provider in `src/devices/`. Open an issue or a pull request.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE), except `firmware/`, which is GPL-2.0-or-later like the QMK code it patches.
