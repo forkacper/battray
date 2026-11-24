@@ -10,6 +10,8 @@ mod logitech;
 mod playstation;
 mod xinput;
 
+use std::path::Path;
+
 use crate::hid::DeviceInfo;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,11 +60,12 @@ pub trait Provider: Send {
     fn poll(&mut self, hid: &[DeviceInfo], out: &mut Vec<Reading>);
 }
 
-/// All built-in providers, in display order.
-pub fn providers() -> Vec<Box<dyn Provider>> {
+/// All built-in providers, in display order. `state_dir` is where providers may keep
+/// small files that must survive a restart.
+pub fn providers(state_dir: &Path) -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(logitech::Logitech::default()),
-        Box::new(keychron::Keychron::default()),
+        Box::new(keychron::Keychron::new(state_dir.join("keychron.tsv"))),
         Box::new(playstation::PlayStation::default()),
         Box::new(xinput::XInput),
         Box::new(bluetooth::Bluetooth),
