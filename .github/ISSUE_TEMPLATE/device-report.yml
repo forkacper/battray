@@ -1,0 +1,53 @@
+name: Device report
+description: A device that is missing, shows a wrong level, or works and is not listed as tested yet.
+labels: [device]
+body:
+  - type: input
+    id: device
+    attributes:
+      label: Device
+      description: Brand and model, e.g. "Logitech G502 X Plus".
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection
+      options:
+        - USB receiver / dongle (2.4 GHz)
+        - Bluetooth
+        - USB cable
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: What happens
+      options:
+        - Not shown at all
+        - Shown, but the level is wrong
+        - Works fine
+    validations:
+      required: true
+  - type: input
+    id: reference
+    attributes:
+      label: Level shown elsewhere
+      description: The level the vendor app or Windows Settings shows, if any.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics report
+      description: >
+        In the tray menu choose "Save diagnostics report" and paste diagnostics.txt here.
+        It is saved in %APPDATA%\battray and lists your HID devices (no personal data
+        beyond device names).
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Lines from %APPDATA%\battray\battray.log that mention the device, if any.
+      render: text
