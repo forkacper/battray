@@ -4,9 +4,9 @@
 //! register it in [`providers`].
 
 mod bluetooth;
-mod dualsense;
 mod keychron;
 mod logitech;
+mod playstation;
 
 use crate::hid::DeviceInfo;
 
@@ -61,7 +61,7 @@ pub fn providers() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(logitech::Logitech::default()),
         Box::new(keychron::Keychron::default()),
-        Box::new(dualsense::DualSense::default()),
+        Box::new(playstation::PlayStation::default()),
         Box::new(bluetooth::Bluetooth),
     ]
 }
