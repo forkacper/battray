@@ -4,7 +4,7 @@
 //! a query on VIA's custom value channel, over USB or through the Keychron Link dongle.
 //! Devices that never answered (stock firmware, keyboard asleep at start-up) are not shown.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use super::{Battery, ChargeState, DeviceKind, Provider, Reading};
@@ -19,13 +19,16 @@ const USAGE_RAW_HID: u16 = 0x61;
 const QUERY: [u8; 3] = [0x08, 0x00, 0x42];
 const VIA_UNHANDLED: u8 = 0xFF;
 const REPLY_VERSION: u8 = 1;
-/// The dongle adds a radio round trip, so allow more than for USB.
-const TIMEOUT: Duration = Duration::from_millis(600);
+/// The dongle adds a radio round trip, and a keyboard in low power mode may only
+/// wake up on the first packet, so a silent attempt is retried once.
+const TIMEOUT: Duration = Duration::from_millis(1500);
+const ATTEMPTS: usize = 2;
 
 #[derive(Default)]
 pub struct Keychron {
-    /// Raw HID interfaces that answered with the battray reply at least once.
-    known: HashSet<String>,
+    /// Raw HID interfaces that answered with the battray reply at least once,
+    /// with the keyboard name they reported.
+    known: HashMap<String, String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -58,10 +61,15 @@ impl Provider for Keychron {
                 &info.parent
             };
             let id = format!("keychron:{key}");
+            let started = Instant::now();
             match query(info) {
                 Ok(Some(Answer::Battery { name, battery })) => {
-                    if self.known.insert(id.clone()) {
-                        log!("keychron: \"{name}\" answers on {}", info.path);
+                    if self.known.insert(id.clone(), name.clone()).is_none() {
+                        log!(
+                            "keychron: \"{name}\" answers on {} after {} ms",
+                            info.path,
+                            started.elapsed().as_millis()
+                        );
                     }
                     found.push(Reading {
                         id,
@@ -72,10 +80,16 @@ impl Provider for Keychron {
                 }
                 Ok(Some(Answer::Unsupported)) => {}
                 // No reply: the keyboard is asleep, out of range, or runs stock firmware.
-                Ok(None) | Err(_) if self.known.contains(&id) => {
+                Ok(None) | Err(_) if self.known.contains_key(&id) => {
+                    log!(
+                        "keychron: no reply on {} within {} ms",
+                        info.path,
+                        started.elapsed().as_millis()
+                    );
+                    let name = self.known.get(&id).cloned().unwrap_or_default();
                     found.push(Reading {
                         id,
-                        name: info.product.clone(),
+                        name,
                         kind: DeviceKind::Keyboard,
                         battery: None,
                     });
@@ -97,6 +111,15 @@ impl Provider for Keychron {
 
 fn query(info: &DeviceInfo) -> std::io::Result<Option<Answer>> {
     let dev = Device::open(info)?;
+    for _ in 0..ATTEMPTS {
+        if let Some(answer) = query_once(&dev)? {
+            return Ok(Some(answer));
+        }
+    }
+    Ok(None)
+}
+
+fn query_once(dev: &Device) -> std::io::Result<Option<Answer>> {
     dev.flush();
     // Report ID 0 followed by the 32-byte VIA packet.
     let mut request = [0u8; 33];
