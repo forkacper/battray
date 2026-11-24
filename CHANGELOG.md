@@ -5,8 +5,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Scoop manifest: `scoop bucket add battray https://github.com/forkacper/battray`.
+
 ### Changed
 
+- Release notes are taken from this changelog.
 - README rewritten with features, install steps and an FAQ.
 
 ## [0.3.0] - 2026-11-24
