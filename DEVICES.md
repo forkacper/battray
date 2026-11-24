@@ -17,6 +17,9 @@ with the diagnostics report from the tray menu (Save diagnostics report).
 
 ## Not supported
 
+- Keychron K15 Max encoder variants and K2 Max JIS White: Keychron's own firmware
+  source for them does not build, so there is no patched firmware yet.
+
 - Keychron keyboards on stock firmware over the 2.4 GHz dongle: the stock firmware
   does not report the battery to the computer. Over Bluetooth they are covered by
   the Bluetooth row above.

@@ -11,7 +11,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Xbox controllers and other XInput gamepads.
 - Any HID device that reports the standard Battery Strength usage.
 - The Keychron firmware patch is built for every wireless Keychron keyboard on the
-  shared wireless code (184 variants), released as `keychron-battray-firmware.zip`.
+  shared wireless code (181 of 184 variants; three do not build in Keychron's own
+  tree), released as `keychron-battray-firmware.zip`.
 - Issue templates for device reports and bugs.
 
 ### Changed
