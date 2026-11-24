@@ -7,6 +7,7 @@ mod bluetooth;
 mod keychron;
 mod logitech;
 mod playstation;
+mod xinput;
 
 use crate::hid::DeviceInfo;
 
@@ -62,6 +63,7 @@ pub fn providers() -> Vec<Box<dyn Provider>> {
         Box::new(logitech::Logitech::default()),
         Box::new(keychron::Keychron::default()),
         Box::new(playstation::PlayStation::default()),
+        Box::new(xinput::XInput),
         Box::new(bluetooth::Bluetooth),
     ]
 }
