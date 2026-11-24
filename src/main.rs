@@ -8,6 +8,7 @@ compile_error!("battray only supports Windows");
 
 mod config;
 mod devices;
+mod devnode;
 mod hid;
 mod icon;
 mod logger;

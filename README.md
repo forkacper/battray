@@ -5,7 +5,8 @@ mice, keyboards and gamepads.
 
 - Native Win32 in Rust: a single small `.exe`, a few MB of RAM, idle between polls.
 - No vendor software needed (G HUB, Steam), though it runs fine alongside it.
-- Supports Logitech HID++ devices (e.g. PRO X SUPERLIGHT 2) and DualSense.
+- Supports Logitech HID++ devices (e.g. PRO X SUPERLIGHT 2), DualSense, and any Bluetooth
+  device that reports its battery to Windows.
 
 Download `battray.exe` from [Releases](https://github.com/forkacper/battray/releases).
 
