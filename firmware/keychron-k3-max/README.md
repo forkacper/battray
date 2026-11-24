@@ -18,7 +18,10 @@ CI runs it and uploads the `.bin` files as the `keychron-k3-max-firmware` artifa
 Flashing is at your own risk. The bootloader lives in the chip's ROM, so a failed
 flash can be repeated, and the official firmware can always be flashed back.
 
-1. Pick the file for your layout and backlight, e.g. `keychron_k3_max_ansi_rgb_battray.bin`.
+1. Download the file for your layout and backlight from
+   [Releases](https://github.com/forkacper/battray/releases), e.g.
+   `keychron_k3_max_ansi_rgb_battray.bin`. ANSI has a wide single-row Enter, ISO a
+   tall one.
 2. Install [QMK Toolbox](https://github.com/qmk/qmk_toolbox/releases) and open the file.
 3. Set the mode switch to Cable and unplug the keyboard.
 4. Remove the space bar keycap, hold the reset button next to the space bar switch,

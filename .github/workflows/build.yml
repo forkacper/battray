@@ -40,6 +40,9 @@ jobs:
 
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
-        run: gh release create "${{ github.ref_name }}" target/release/battray.exe --generate-notes
+        # The firmware workflow may have created the release already.
+        run: |
+          gh release create "${{ github.ref_name }}" --generate-notes || true
+          gh release upload "${{ github.ref_name }}" target/release/battray.exe --clobber
         env:
           GH_TOKEN: ${{ github.token }}

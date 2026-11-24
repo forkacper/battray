@@ -4,9 +4,13 @@ on:
   push:
     branches: [main]
     paths: ["firmware/**", ".github/workflows/firmware.yml"]
+    tags: ["v*"]
   pull_request:
     paths: ["firmware/**", ".github/workflows/firmware.yml"]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   keychron-k3-max:
@@ -24,3 +28,21 @@ jobs:
         with:
           name: keychron-k3-max-firmware
           path: firmware/keychron-k3-max/out/*.bin
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: keychron-k3-max
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: keychron-k3-max-firmware
+          path: firmware
+
+      # The app workflow may have created the release already.
+      - name: Attach to release
+        run: |
+          gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes || true
+          gh release upload "${{ github.ref_name }}" firmware/*.bin --repo "${{ github.repository }}" --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
