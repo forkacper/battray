@@ -9,6 +9,9 @@ keywords = ["battery", "tray", "logitech", "dualsense", "keychron"]
 categories = ["hardware-support", "os::windows-apis"]
 license = "MIT"
 
+[build-dependencies]
+embed-resource = "3.0.12"
+
 [dependencies]
 windows-sys = { version = "0.61.2", features = [
     "Win32_Devices_DeviceAndDriverInstallation",

@@ -7,6 +7,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- Application icon for `battray.exe`.
 - Scoop manifest: `scoop bucket add battray https://github.com/forkacper/battray`.
 
 ### Changed
