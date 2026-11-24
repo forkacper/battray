@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::fmt::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
@@ -54,17 +54,28 @@ impl Notify {
     }
 }
 
-pub fn spawn(notify: Notify, shared: Shared, interval: Duration) -> Sender<Command> {
+pub fn spawn(
+    notify: Notify,
+    shared: Shared,
+    interval: Duration,
+    state_dir: PathBuf,
+) -> Sender<Command> {
     let (tx, rx) = mpsc::channel();
     thread::Builder::new()
         .name("poller".to_owned())
-        .spawn(move || run(&rx, notify, &shared, interval))
+        .spawn(move || run(&rx, notify, &shared, interval, &state_dir))
         .expect("spawning the poller thread only fails when the OS is out of resources");
     tx
 }
 
-fn run(rx: &Receiver<Command>, notify: Notify, shared: &Shared, mut interval: Duration) {
-    let mut providers = devices::providers();
+fn run(
+    rx: &Receiver<Command>,
+    notify: Notify,
+    shared: &Shared,
+    mut interval: Duration,
+    state_dir: &Path,
+) {
+    let mut providers = devices::providers(state_dir);
     let mut last_known: HashMap<String, Battery> = HashMap::new();
     let mut wait = Duration::ZERO;
     loop {

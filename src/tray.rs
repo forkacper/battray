@@ -158,6 +158,7 @@ pub fn run(config: Config, data_dir: PathBuf) -> i32 {
         notify,
         Arc::clone(&shared),
         Duration::from_secs(config.interval_secs),
+        data_dir.clone(),
     );
     let mut app = App {
         hwnd,

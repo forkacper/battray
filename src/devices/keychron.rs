@@ -2,9 +2,12 @@
 //!
 //! Stock Keychron firmware does not report its battery to the host. The patch answers
 //! a query on VIA's custom value channel, over USB or through the Keychron Link dongle.
-//! Devices that never answered (stock firmware, keyboard asleep at start-up) are not shown.
+//! Devices that never answered (stock firmware) are not shown. Keyboards that did are
+//! remembered across restarts, so one that is asleep at start-up still shows up.
 
 use std::collections::{HashMap, HashSet};
+use std::fs;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use super::{Battery, ChargeState, DeviceKind, Provider, Reading};
@@ -24,11 +27,40 @@ const REPLY_VERSION: u8 = 1;
 const TIMEOUT: Duration = Duration::from_millis(1500);
 const ATTEMPTS: usize = 2;
 
-#[derive(Default)]
 pub struct Keychron {
     /// Raw HID interfaces that answered with the battray reply at least once,
     /// with the keyboard name they reported.
     known: HashMap<String, String>,
+    /// File the known keyboards are kept in, one `id<TAB>name` per line.
+    state: PathBuf,
+}
+
+impl Keychron {
+    pub fn new(state: PathBuf) -> Self {
+        let known = fs::read_to_string(&state)
+            .unwrap_or_default()
+            .lines()
+            .filter_map(|line| line.split_once('\t'))
+            .map(|(id, name)| (id.to_owned(), name.to_owned()))
+            .collect();
+        Self { known, state }
+    }
+
+    fn remember(&mut self, id: String, name: String) -> bool {
+        if self.known.get(&id) == Some(&name) {
+            return false;
+        }
+        self.known.insert(id, name);
+        let text: String = self
+            .known
+            .iter()
+            .map(|(id, name)| format!("{id}\t{name}\n"))
+            .collect();
+        if let Err(e) = fs::write(&self.state, text) {
+            log!("keychron: cannot save {}: {e}", self.state.display());
+        }
+        true
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -64,7 +96,7 @@ impl Provider for Keychron {
             let started = Instant::now();
             match query(info) {
                 Ok(Some(Answer::Battery { name, battery })) => {
-                    if self.known.insert(id.clone(), name.clone()).is_none() {
+                    if self.remember(id.clone(), name.clone()) {
                         log!(
                             "keychron: \"{name}\" answers on {} after {} ms",
                             info.path,
