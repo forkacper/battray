@@ -24,6 +24,10 @@
 #define BATTRAY_REPLY_VERSION 1
 #define BATTRAY_NAME_OFFSET 9
 
+#ifndef WILRESS_RAW_ENABLE
+#    error "battray needs WILRESS_RAW_ENABLE, otherwise queries over the dongle never reach the keyboard"
+#endif
+
 void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
     // data = [ command_id, channel_id, value_id, value_data ]
     if (length < 32 || data[0] != id_custom_get_value || data[1] != id_custom_channel || data[2] != BATTRAY_VALUE_ID) {
