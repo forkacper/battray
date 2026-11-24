@@ -5,16 +5,17 @@ mice, keyboards and gamepads.
 
 - Native Win32 in Rust: a single small `.exe`, a few MB of RAM, idle between polls.
 - No vendor software needed (G HUB, Steam), though it runs fine alongside it.
-- Supports Logitech HID++ devices (e.g. PRO X SUPERLIGHT 2), DualSense, and any Bluetooth
-  device that reports its battery to Windows.
-- Keychron K3 Max on the 2.4 GHz dongle with the [firmware patch](firmware/keychron-k3-max).
+- Supports Logitech mice, DualSense, Keychron K3 Max and Bluetooth devices. See
+  [supported devices](DEVICES.md).
 
 Download `battray.exe` from [Releases](https://github.com/forkacper/battray/releases).
+See the [changelog](CHANGELOG.md) for what changed.
 
 ## Contributing
 
 Contributions are welcome, especially support for new devices. Each device family is
-one provider in `src/devices/`. Open an issue or a pull request.
+one provider in `src/devices/`. Open an issue or a pull request, and add your change
+to the Unreleased section of the [changelog](CHANGELOG.md).
 
 ## License
 
