@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-24
+
 ### Added
 
 - `battray --version` prints the version and exits, for scripts and package managers.
@@ -78,7 +80,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Sony DualSense and DualSense Edge over Bluetooth and USB.
 - Refresh interval, low battery alerts, start with Windows and a diagnostics report.
 
-[Unreleased]: https://github.com/forkacper/battray/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/forkacper/battray/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/forkacper/battray/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/forkacper/battray/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/forkacper/battray/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/forkacper/battray/compare/v0.2.0...v0.3.0
