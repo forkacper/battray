@@ -1,8 +1,13 @@
-# Keychron K3 Max firmware for battray
+# Keychron firmware for battray
 
 Stock Keychron firmware does not report the battery level to the computer, and
 ignores raw HID commands that arrive through the 2.4 GHz dongle. This is Keychron's
-own firmware with two small changes, so battray can read the battery:
+own firmware with two small changes, so battray can read the battery. It is built
+for every Keychron keyboard on Keychron's shared wireless code: the K Max, Q Max,
+V Max and HE series, plus J5, R3, R5 and R6.
+
+Only the K3 Max has been tested on real hardware so far. The changes do not depend
+on the model, but please report how it went on yours.
 
 - `wireless-raw-hid.patch`: fixes the disabled code path that hands raw HID from the
   wireless module (dongle or Bluetooth) to the command handler.
@@ -10,29 +15,33 @@ own firmware with two small changes, so battray can read the battery:
   query on VIA's custom value channel (`battray.c`). Keychron's own commands and
   the Launcher keep working.
 
-`build.sh` builds it from Keychron's QMK tree at a pinned commit, for every variant.
-CI runs it and uploads the `.bin` files as the `keychron-k3-max-firmware` artifact.
+`build.sh` builds it from Keychron's QMK tree at a pinned commit, for every variant
+(`build.sh k3_max` for one board, `build.sh --list` for the board list). CI builds
+all boards and attaches `keychron-battray-firmware.zip` to each release.
 
 ## Flashing (Windows)
 
 Flashing is at your own risk. The bootloader lives in the chip's ROM, so a failed
 flash can be repeated, and the official firmware can always be flashed back.
 
-1. Download the file for your layout and backlight from
-   [Releases](https://github.com/forkacper/battray/releases), e.g.
+1. Download `keychron-battray-firmware.zip` from
+   [Releases](https://github.com/forkacper/battray/releases) and take the file for
+   your model, layout and backlight, named
+   `keychron_<model>_<layout>_<backlight>_battray.bin`, e.g.
    `keychron_k3_max_ansi_rgb_battray.bin`. ANSI has a wide single-row Enter, ISO a
    tall one.
 2. Install [QMK Toolbox](https://github.com/qmk/qmk_toolbox/releases) and open the file.
 3. Set the mode switch to Cable and unplug the keyboard.
-4. Remove the space bar keycap, hold the reset button next to the space bar switch,
-   plug the cable in and release after about two seconds. QMK Toolbox reports
-   "DFU device connected".
+4. Hold the reset button, plug the cable in and release after about two seconds.
+   QMK Toolbox reports "DFU device connected". On most models the button sits under
+   the space bar keycap; Keychron's "factory reset and flash firmware" guide for your
+   model shows where.
 5. Click Flash and do not unplug until it finishes.
 
-To go back, flash the official file from
-[Keychron's firmware page](https://www.keychron.com/pages/firmware-and-json-files-of-the-keychron-qmk-k-pro-and-k-max-series-keyboards)
-the same way, following
-[Keychron's K3 Max guide](https://keychron.de/pages/how-to-factory-reset-and-flash-firmware-for-your-k3-max-keyboard).
+To go back, flash the official file for your model from Keychron's site the same
+way, e.g. from the
+[K Pro and K Max firmware page](https://www.keychron.com/pages/firmware-and-json-files-of-the-keychron-qmk-k-pro-and-k-max-series-keyboards)
+and [Keychron's K3 Max guide](https://keychron.de/pages/how-to-factory-reset-and-flash-firmware-for-your-k3-max-keyboard).
 
 ## Protocol
 
