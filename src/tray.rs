@@ -1,4 +1,5 @@
-//! The whole UI: a hidden window that owns the tray icons and their context menu.
+//! The tray: a hidden window that owns the tray icons and their context menu, and
+//! applies settings changes coming from the menu or the settings window.
 
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
@@ -17,15 +18,16 @@ use windows_sys::Win32::UI::Shell::{
     NOTIFYICONDATAW, Shell_NotifyIconW, ShellExecuteW,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    AppendMenuW, CreatePopupMenu, CreateWindowExW, DBT_DEVICEARRIVAL, DBT_DEVICEREMOVECOMPLETE,
-    DBT_DEVTYP_DEVICEINTERFACE, DEV_BROADCAST_DEVICEINTERFACE_W, DEVICE_NOTIFY_WINDOW_HANDLE,
-    DefWindowProcW, DestroyIcon, DestroyMenu, DestroyWindow, DispatchMessageW, GetCursorPos,
-    GetMessageW, HICON, HMENU, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG,
-    PostMessageW, PostQuitMessage, RegisterClassW, RegisterDeviceNotificationW,
-    RegisterWindowMessageW, SM_CXSMICON, SW_SHOWNORMAL, SetForegroundWindow, TPM_NONOTIFY,
-    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_CONTEXTMENU,
-    WM_DESTROY, WM_DEVICECHANGE, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP, WM_NULL,
-    WM_RBUTTONUP, WNDCLASSW,
+    ASFW_ANY, AllowSetForegroundWindow, AppendMenuW, CreatePopupMenu, CreateWindowExW,
+    DBT_DEVICEARRIVAL, DBT_DEVICEREMOVECOMPLETE, DBT_DEVTYP_DEVICEINTERFACE,
+    DEV_BROADCAST_DEVICEINTERFACE_W, DEVICE_NOTIFY_WINDOW_HANDLE, DefWindowProcW, DestroyIcon,
+    DestroyMenu, DispatchMessageW, FindWindowW, GetCursorPos, GetMessageW, HICON, HMENU,
+    IsDialogMessageW, MF_CHECKED, MF_GRAYED, MF_POPUP, MF_SEPARATOR, MF_STRING, MSG, PostMessageW,
+    PostQuitMessage, RegisterClassW, RegisterDeviceNotificationW, RegisterWindowMessageW,
+    SM_CXSMICON, SW_SHOWNORMAL, SetForegroundWindow, SetMenuDefaultItem, TPM_NONOTIFY,
+    TPM_RETURNCMD, TPM_RIGHTBUTTON, TrackPopupMenu, TranslateMessage, WM_APP, WM_CLOSE,
+    WM_CONTEXTMENU, WM_DESTROY, WM_DEVICECHANGE, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP,
+    WM_NULL, WM_RBUTTONUP, WNDCLASSW,
 };
 
 use crate::config::{self, Config, INTERVAL_CHOICES, TrayMode};
@@ -34,11 +36,16 @@ use crate::hid;
 use crate::icon::{self, Rgb};
 use crate::log;
 use crate::util::{copy_wide, wide};
+use crate::window::{self, View};
 use crate::worker::{self, Command, DeviceState, Notify, Shared};
+
+const CLASS: &str = "battray";
 
 const WM_TRAY: u32 = WM_APP + 1;
 const WM_UPDATED: u32 = WM_APP + 2;
 const WM_DIAGNOSTICS: u32 = WM_APP + 3;
+/// Sent by a second instance to open the settings window of the running one.
+const WM_SHOW_WINDOW: u32 = WM_APP + 4;
 
 /// Icon shown in the single-icon modes, and when there is nothing else to show.
 const MAIN_UID: u32 = 1;
@@ -53,6 +60,7 @@ const ID_AUTOSTART: u32 = 6;
 const ID_DIAGNOSTICS: u32 = 7;
 const ID_OPEN_FOLDER: u32 = 8;
 const ID_EXIT: u32 = 9;
+const ID_OPEN: u32 = 10;
 const ID_INTERVAL_BASE: u32 = 100;
 const ID_SINGLE_BASE: u32 = 200;
 
@@ -94,14 +102,43 @@ struct App {
     low_notified: HashSet<String>,
 }
 
-enum Action {
-    None,
+/// A settings change or action, from the tray menu or the settings window.
+pub enum Change {
+    Mode(TrayMode),
+    Interval(u64),
+    NotifyLow(bool),
+    Threshold(u8),
+    Autostart(bool),
+    Refresh,
+    Diagnostics,
+    OpenFolder,
     Exit,
 }
 
+/// Applies a change from the settings window.
+pub fn apply(change: Change) {
+    with_app(|app| app.apply(change));
+}
+
+/// Asks an already running instance to open its settings window.
+pub fn activate_running_instance() {
+    let class = wide(CLASS);
+    // SAFETY: `class` is null-terminated; a null title matches any window of the class.
+    let hwnd = unsafe { FindWindowW(class.as_ptr(), ptr::null()) };
+    if hwnd.is_null() {
+        return;
+    }
+    // SAFETY: lets the running instance take the foreground, which this process,
+    // started by the user, is allowed to grant. PostMessageW tolerates any handle.
+    unsafe {
+        AllowSetForegroundWindow(ASFW_ANY);
+        PostMessageW(hwnd, WM_SHOW_WINDOW, 0, 0);
+    }
+}
+
 /// Runs the UI until the user exits. Returns the process exit code.
-pub fn run(config: Config, data_dir: PathBuf) -> i32 {
-    let class = wide("battray");
+pub fn run(config: Config, data_dir: PathBuf, open_window: bool) -> i32 {
+    let class = wide(CLASS);
     // SAFETY: a null module name returns this executable's handle.
     let instance = unsafe { GetModuleHandleW(ptr::null()) };
     let wc = WNDCLASSW {
@@ -176,10 +213,21 @@ pub fn run(config: Config, data_dir: PathBuf) -> i32 {
     };
     app.refresh_icons();
     APP.with(|cell| *cell.borrow_mut() = Some(app));
+    config::upgrade_autostart();
+    if open_window {
+        show_window();
+    }
 
     let mut msg = MSG::default();
     // SAFETY: standard message loop on this thread's queue; `msg` is a valid MSG.
     while unsafe { GetMessageW(&mut msg, ptr::null_mut(), 0, 0) } > 0 {
+        // Tab and arrow key navigation between the settings window's controls.
+        if let Some(dialog) = window::handle()
+            // SAFETY: `dialog` is our window and `msg` was filled in by GetMessageW.
+            && unsafe { IsDialogMessageW(dialog, &msg) } != 0
+        {
+            continue;
+        }
         // SAFETY: `msg` was filled in by GetMessageW.
         unsafe {
             TranslateMessage(&msg);
@@ -226,10 +274,15 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
     match msg {
         WM_TRAY => {
             // Legacy (pre-version-4) callback: the mouse message is in the low word of lparam.
-            let event = (lparam as u32) & 0xFFFF;
-            if matches!(event, WM_LBUTTONUP | WM_RBUTTONUP | WM_CONTEXTMENU) {
-                show_menu(hwnd);
+            match (lparam as u32) & 0xFFFF {
+                WM_LBUTTONUP => show_window(),
+                WM_RBUTTONUP | WM_CONTEXTMENU => show_menu(hwnd),
+                _ => {}
             }
+            0
+        }
+        WM_SHOW_WINDOW => {
+            show_window();
             0
         }
         WM_UPDATED => {
@@ -300,11 +353,16 @@ fn show_menu(hwnd: HWND) {
         DestroyMenu(menu);
         cmd
     };
-    let action = with_app(|app| app.on_command(cmd as u32, &single_ids));
-    if matches!(action, Some(Action::Exit)) {
-        // SAFETY: `hwnd` is our window; WM_DESTROY cleans up and ends the message loop.
-        unsafe { DestroyWindow(hwnd) };
+    match cmd as u32 {
+        ID_OPEN => show_window(),
+        cmd => {
+            with_app(|app| app.on_command(cmd, &single_ids));
+        }
     }
+}
+
+fn show_window() {
+    with_app(|app| window::show(&app.view()));
 }
 
 impl App {
@@ -329,6 +387,22 @@ impl App {
         self.polled = true;
         self.refresh_icons();
         self.check_low_battery();
+        self.sync_window();
+    }
+
+    fn view(&self) -> View<'_> {
+        View {
+            devices: &self.devices,
+            polled: self.polled,
+            config: &self.config,
+            autostart: config::autostart_enabled(),
+        }
+    }
+
+    fn sync_window(&self) {
+        if window::is_visible() {
+            window::update(&self.view());
+        }
     }
 
     /// Brings the tray icons in line with the current devices and display mode.
@@ -513,6 +587,11 @@ impl App {
         let (menu, display, interval) =
             unsafe { (CreatePopupMenu(), CreatePopupMenu(), CreatePopupMenu()) };
 
+        append(menu, MF_STRING, ID_OPEN, "Open battray");
+        // SAFETY: `menu` is valid; the default item is shown in bold.
+        unsafe { SetMenuDefaultItem(menu, ID_OPEN, 0) };
+        separator(menu);
+
         if self.devices.is_empty() {
             let text = if self.polled {
                 "No supported devices found"
@@ -566,12 +645,8 @@ impl App {
         append_popup(menu, display, "Tray display");
 
         for (i, secs) in INTERVAL_CHOICES.iter().enumerate() {
-            let label = match secs {
-                s if s % 60 == 0 && *s > 60 => format!("Every {} minutes", s / 60),
-                60 => "Every minute".to_owned(),
-                s => format!("Every {s} seconds"),
-            };
             let on = self.config.interval_secs == *secs;
+            let label = config::interval_label(*secs);
             append(interval, checked(on), ID_INTERVAL_BASE + i as u32, &label);
         }
         append_popup(menu, interval, "Refresh interval");
@@ -597,75 +672,102 @@ impl App {
         (menu, single_ids)
     }
 
-    fn on_command(&mut self, cmd: u32, single_ids: &[String]) -> Action {
-        match cmd {
-            ID_REFRESH => self.send(Command::Refresh),
-            ID_MODE_LOWEST => self.set_mode(TrayMode::Lowest),
-            ID_MODE_PER_DEVICE => self.set_mode(TrayMode::PerDevice),
-            ID_NOTIFY => {
-                self.config.notify_low = !self.config.notify_low;
+    fn on_command(&mut self, cmd: u32, single_ids: &[String]) {
+        let change = match cmd {
+            ID_REFRESH => Change::Refresh,
+            ID_MODE_LOWEST => Change::Mode(TrayMode::Lowest),
+            ID_MODE_PER_DEVICE => Change::Mode(TrayMode::PerDevice),
+            ID_NOTIFY => Change::NotifyLow(!self.config.notify_low),
+            ID_AUTOSTART => Change::Autostart(!config::autostart_enabled()),
+            ID_DIAGNOSTICS => Change::Diagnostics,
+            ID_OPEN_FOLDER => Change::OpenFolder,
+            ID_EXIT => Change::Exit,
+            c if (ID_INTERVAL_BASE..ID_SINGLE_BASE).contains(&c) => {
+                match INTERVAL_CHOICES.get((c - ID_INTERVAL_BASE) as usize) {
+                    Some(&secs) => Change::Interval(secs),
+                    None => return,
+                }
+            }
+            c if c >= ID_SINGLE_BASE => match single_ids.get((c - ID_SINGLE_BASE) as usize) {
+                Some(id) => Change::Mode(TrayMode::Single(id.clone())),
+                None => return,
+            },
+            _ => return,
+        };
+        self.apply(change);
+    }
+
+    fn apply(&mut self, change: Change) {
+        match change {
+            Change::Mode(mode) => {
+                self.config.mode = mode;
+                self.save_config();
+                self.refresh_icons();
+            }
+            Change::Interval(secs) => {
+                self.config.interval_secs = secs;
+                self.save_config();
+                self.send(Command::SetInterval(Duration::from_secs(secs)));
+            }
+            Change::NotifyLow(on) => {
+                self.config.notify_low = on;
                 self.low_notified.clear();
                 self.save_config();
             }
-            ID_AUTOSTART => {
-                if let Err(e) = config::set_autostart(!config::autostart_enabled()) {
+            Change::Threshold(percent) => {
+                if self.config.low_threshold == percent {
+                    return;
+                }
+                self.config.low_threshold = percent;
+                self.low_notified.clear();
+                self.save_config();
+                self.refresh_icons();
+            }
+            Change::Autostart(on) => {
+                if let Err(e) = config::set_autostart(on) {
                     log!("cannot change autostart: {e}");
                 }
             }
-            ID_DIAGNOSTICS => self.send(Command::WriteDiagnostics(
+            Change::Refresh => self.send(Command::Refresh),
+            Change::Diagnostics => self.send(Command::WriteDiagnostics(
                 self.data_dir.join("diagnostics.txt"),
             )),
-            ID_OPEN_FOLDER => open_path(self.hwnd, &self.data_dir),
-            ID_EXIT => return Action::Exit,
-            c if (ID_INTERVAL_BASE..ID_SINGLE_BASE).contains(&c) => {
-                if let Some(&secs) = INTERVAL_CHOICES.get((c - ID_INTERVAL_BASE) as usize) {
-                    self.config.interval_secs = secs;
-                    self.save_config();
-                    self.send(Command::SetInterval(Duration::from_secs(secs)));
-                }
+            Change::OpenFolder => open_path(self.hwnd, &self.data_dir),
+            Change::Exit => {
+                // SAFETY: `hwnd` is our window; WM_CLOSE destroys it, and WM_DESTROY
+                // cleans up and ends the message loop.
+                unsafe { PostMessageW(self.hwnd, WM_CLOSE, 0, 0) };
+                return;
             }
-            c if c >= ID_SINGLE_BASE => {
-                if let Some(id) = single_ids.get((c - ID_SINGLE_BASE) as usize) {
-                    self.set_mode(TrayMode::Single(id.clone()));
-                }
-            }
-            _ => {}
         }
-        Action::None
-    }
-
-    fn set_mode(&mut self, mode: TrayMode) {
-        self.config.mode = mode;
-        self.save_config();
-        self.refresh_icons();
+        self.sync_window();
     }
 }
 
 /// Icon text, colour and tooltip for a device (or for "nothing to show").
 fn look(device: Option<&DeviceState>, threshold: u8, tip: String) -> Look {
-    let (text, color) = match device {
-        None => ("-".to_owned(), icon::GRAY),
-        Some(DeviceState { battery: None, .. }) => ("?".to_owned(), icon::GRAY),
+    let text = match device {
+        None => "-".to_owned(),
+        Some(DeviceState { battery: None, .. }) => "?".to_owned(),
         Some(DeviceState {
-            battery: Some(b),
-            fresh,
-            ..
-        }) => {
-            let color = if !fresh {
-                icon::GRAY
-            } else if matches!(b.charging, ChargeState::Charging | ChargeState::Full) {
-                icon::BLUE
-            } else if b.percent <= threshold {
-                icon::RED
-            } else if b.percent <= threshold.max(40) {
-                icon::AMBER
-            } else {
-                icon::GREEN
-            };
-            (b.percent.to_string(), color)
-        }
+            battery: Some(b), ..
+        }) => b.percent.to_string(),
     };
+    let color = device.map_or(icon::GRAY, |d| level_color(d, threshold));
     Look { text, color, tip }
+}
+
+/// Status colour of a device: gray when unknown or asleep, blue when charging,
+/// then red, amber or green by level.
+pub fn level_color(device: &DeviceState, threshold: u8) -> Rgb {
+    match device.battery {
+        None => icon::GRAY,
+        Some(_) if !device.fresh => icon::GRAY,
+        Some(b) if matches!(b.charging, ChargeState::Charging | ChargeState::Full) => icon::BLUE,
+        Some(b) if b.percent <= threshold => icon::RED,
+        Some(b) if b.percent <= threshold.max(40) => icon::AMBER,
+        Some(_) => icon::GREEN,
+    }
 }
 
 /// One human-readable line per device, used in the menu and tooltips.
