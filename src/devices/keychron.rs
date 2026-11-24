@@ -1,4 +1,4 @@
-//! Keychron keyboards running the battray firmware patch (see `firmware/keychron-k3-max`).
+//! Keychron keyboards running the battray firmware patch (see `firmware/keychron`).
 //!
 //! Stock Keychron firmware does not report its battery to the host. The patch answers
 //! a query on VIA's custom value channel, over USB or through the Keychron Link dongle.

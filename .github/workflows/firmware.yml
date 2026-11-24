@@ -13,36 +13,57 @@ permissions:
   contents: write
 
 jobs:
-  keychron-k3-max:
+  boards:
+    runs-on: ubuntu-latest
+    outputs:
+      boards: ${{ steps.list.outputs.boards }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: list
+        name: List Keychron wireless boards
+        run: echo "boards=$(sh firmware/keychron/build.sh --list)" >> "$GITHUB_OUTPUT"
+        env:
+          WORK: /tmp/keychron
+
+  keychron:
+    needs: boards
     runs-on: ubuntu-latest
     container: ghcr.io/qmk/qmk_cli
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJson(needs.boards.outputs.boards) }}
     steps:
       - uses: actions/checkout@v7
 
       - name: Build firmware
-        run: sh firmware/keychron-k3-max/build.sh
+        run: sh firmware/keychron/build.sh "${{ matrix.board }}"
         env:
           WORK: /tmp/keychron
 
       - uses: actions/upload-artifact@v7
         with:
-          name: keychron-k3-max-firmware
-          path: firmware/keychron-k3-max/out/*.bin
+          name: keychron-${{ matrix.board }}
+          path: firmware/keychron/out/*
 
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: keychron-k3-max
+    # Publish whatever built, even if a few boards failed.
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
+    needs: keychron
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: keychron-k3-max-firmware
-          path: firmware
+          pattern: keychron-*
+          merge-multiple: true
+          path: keychron
 
       # The app workflow may have created the release already.
       - name: Attach to release
         run: |
+          (cd keychron && zip -q ../keychron-battray-firmware.zip *)
           gh release create "${{ github.ref_name }}" --repo "${{ github.repository }}" --generate-notes || true
-          gh release upload "${{ github.ref_name }}" firmware/*.bin --repo "${{ github.repository }}" --clobber
+          gh release upload "${{ github.ref_name }}" keychron-battray-firmware.zip --repo "${{ github.repository }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
