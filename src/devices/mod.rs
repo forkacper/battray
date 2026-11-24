@@ -5,6 +5,7 @@
 
 mod bluetooth;
 mod dualsense;
+mod keychron;
 mod logitech;
 
 use crate::hid::DeviceInfo;
@@ -59,6 +60,7 @@ pub trait Provider: Send {
 pub fn providers() -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(logitech::Logitech::default()),
+        Box::new(keychron::Keychron::default()),
         Box::new(dualsense::DualSense::default()),
         Box::new(bluetooth::Bluetooth),
     ]
