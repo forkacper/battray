@@ -17,13 +17,20 @@ mod util;
 mod window;
 mod worker;
 
+use std::io::Write as _;
+
 use windows_sys::Win32::Foundation::{ERROR_ALREADY_EXISTS, GetLastError};
+use windows_sys::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
 use windows_sys::Win32::System::Threading::CreateMutexW;
 use windows_sys::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 
 fn main() {
+    if std::env::args().skip(1).any(|a| a == "--version") {
+        print_version();
+        return;
+    }
     let in_tray = std::env::args().skip(1).any(|a| a == config::TRAY_FLAG);
     let name = util::wide("Local\\battray-single-instance");
     // SAFETY: `name` is null-terminated. The mutex handle is intentionally kept open
@@ -44,4 +51,14 @@ fn main() {
     log!("battray {} starting", env!("CARGO_PKG_VERSION"));
     let cfg = config::Config::load(&data_dir.join("config.ini"));
     std::process::exit(tray::run(cfg, data_dir, !in_tray));
+}
+
+/// Prints the version to the console that started battray, if any, and returns, so
+/// scripts and package managers can check the installed version.
+fn print_version() {
+    // SAFETY: attaching to the parent's console has no preconditions; it fails
+    // harmlessly when there is none or output is already redirected.
+    unsafe { AttachConsole(ATTACH_PARENT_PROCESS) };
+    // Without a console the write fails, and there is nobody to tell.
+    let _ = writeln!(std::io::stdout(), "battray {}", env!("CARGO_PKG_VERSION"));
 }
