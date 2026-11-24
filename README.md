@@ -11,6 +11,8 @@ mice and keyboards, Keychron keyboards, PlayStation DualSense and DualShock 4,
 Xbox controllers and Bluetooth devices, all in one place, without G HUB, Steam or
 any other vendor software.
 
+![battray in the Windows tray: keyboard at 38 % and mouse at 54 %](docs/tray.png)
+
 ## Features
 
 - **Super lightweight**: native Win32 in Rust, a single exe of about 260 KB, a few MB
