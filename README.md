@@ -12,9 +12,9 @@
 
 **Battery level of your wireless mouse, keyboard and controller in the Windows tray.**
 battray is a tiny, open source battery monitor for wireless peripherals: Logitech
-mice, keyboards and headsets, Keychron keyboards, PlayStation DualSense and DualShock 4,
-Xbox controllers and Bluetooth devices, all in one place, without G HUB, Steam or
-any other vendor software.
+mice, keyboards and headsets, Razer mice and keyboards, Keychron keyboards, PlayStation DualSense and DualShock 4,
+Xbox controllers and Bluetooth devices, all in one place, without G HUB, Synapse, Steam
+or any other vendor software.
 
 <img src="docs/tray.png" width="600" alt="battray tray icons: keyboard at 38 %, mouse at 54 %, controller at 71 % and charging">
 
@@ -38,6 +38,7 @@ any other vendor software.
 |---|---|
 | Logitech HID++ 2.0 mice and keyboards (G PRO X SUPERLIGHT, G502, MX Master and more) | Lightspeed, Unifying or Bolt receiver, USB |
 | Logitech G headsets (G733, G935, G PRO X Wireless, PRO X 2 LIGHTSPEED, G522 and more) | USB dongle |
+| Razer mice and keyboards (DeathAdder, Viper, Basilisk, BlackWidow and more) | HyperSpeed dongle, USB |
 | Sony DualSense, DualSense Edge, DualShock 4 | Bluetooth, USB, Sony wireless adapter |
 | Xbox controllers and other XInput gamepads | Xbox Wireless Adapter, Bluetooth |
 | Keychron wireless keyboards (K Max, Q Max, V Max and more) | 2.4 GHz dongle, Bluetooth, USB, with a [firmware patch](firmware/keychron) |
@@ -85,6 +86,10 @@ tested in [DEVICES.md](DEVICES.md).
 **How do I check my Logitech mouse battery without G HUB?**
 Run battray. It talks to Logitech devices directly over HID++, the protocol G HUB
 uses, so G HUB can be uninstalled or closed. It also works with G HUB running.
+
+**How do I check my Razer mouse battery without Synapse?**
+Run battray. It asks the mouse or keyboard over its HyperSpeed dongle or cable with
+the same commands Synapse uses, so Synapse is not needed.
 
 **How do I see the DualSense or DualShock 4 battery on Windows?**
 Windows does not show it, but battray does, over Bluetooth or USB, without Steam or

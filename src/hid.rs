@@ -36,8 +36,9 @@ use windows_sys::core::GUID;
 
 use crate::util::{from_wide, wide};
 
-/// `IOCTL_HID_GET_FEATURE` from hidclass.h (not exported by windows-sys).
+/// `IOCTL_HID_GET_FEATURE` and `IOCTL_HID_SET_FEATURE` from hidclass.h (not exported by windows-sys).
 const IOCTL_HID_GET_FEATURE: u32 = 0x000B_0192;
+const IOCTL_HID_SET_FEATURE: u32 = 0x000B_0191;
 /// How long a write may take before it is cancelled.
 const WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 
@@ -339,6 +340,35 @@ impl Device {
                 buf.truncate(n as usize);
                 Ok(buf)
             }
+            None => Err(io::Error::from(io::ErrorKind::TimedOut)),
+        }
+    }
+
+    /// Sends a feature report. `data[0]` is the report ID; the report is zero-padded
+    /// to the collection's feature report length.
+    pub fn set_feature(&self, data: &[u8]) -> io::Result<()> {
+        let mut buf = data.to_vec();
+        buf.resize(self.feature_len.max(data.len()), 0);
+        let len = buf.len() as u32;
+        let handle = self.handle.0;
+        let ptr = buf.as_ptr();
+        let sent = self.overlapped(WRITE_TIMEOUT, |ov| {
+            // SAFETY: `buf` and `ov` stay alive and unmoved until the I/O completes or is cancelled.
+            unsafe {
+                DeviceIoControl(
+                    handle,
+                    IOCTL_HID_SET_FEATURE,
+                    ptr.cast(),
+                    len,
+                    ptr::null_mut(),
+                    0,
+                    ptr::null_mut(),
+                    ov,
+                )
+            }
+        })?;
+        match sent {
+            Some(_) => Ok(()),
             None => Err(io::Error::from(io::ErrorKind::TimedOut)),
         }
     }

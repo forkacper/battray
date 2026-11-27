@@ -8,6 +8,7 @@ mod hid_battery;
 mod keychron;
 mod logitech;
 mod playstation;
+mod razer;
 mod xinput;
 
 use std::path::Path;
@@ -65,6 +66,7 @@ pub trait Provider: Send {
 pub fn providers(state_dir: &Path) -> Vec<Box<dyn Provider>> {
     vec![
         Box::new(logitech::Logitech::default()),
+        Box::new(razer::Razer::default()),
         Box::new(keychron::Keychron::new(state_dir.join("keychron.tsv"))),
         Box::new(playstation::PlayStation::default()),
         Box::new(xinput::XInput),
