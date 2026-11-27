@@ -64,6 +64,22 @@ scoop install battray
 
 Requires Windows 10 or 11. Settings and logs are kept in `%APPDATA%\battray`.
 
+## Device not working?
+
+If your device is missing or shows a wrong level:
+
+1. Wake it up (move the mouse, press a key, turn the headset on) and wait for the
+   next refresh.
+2. Choose *Save diagnostics report* in the tray menu or *Save diagnostics* in the
+   window. battray saves `diagnostics.txt` in `%APPDATA%\battray` and opens it. It
+   lists your HID devices, with no personal data beyond device names.
+3. [Open a device report](https://github.com/forkacper/battray/issues/new?template=device-report.yml)
+   with the brand and model, how it is connected, and the diagnostics report.
+   Lines about the device from `%APPDATA%\battray\battray.log` help too.
+
+Reports are also welcome when an untested device works, so it can be marked as
+tested in [DEVICES.md](DEVICES.md).
+
 ## FAQ
 
 **How do I check my Logitech mouse battery without G HUB?**
@@ -82,11 +98,6 @@ patched firmware from the release (`keychron-battray-firmware.zip`), see
 **Windows SmartScreen warns about the exe.**
 The exe is not code signed yet. Choose *More info* and *Run anyway*, or build it
 yourself with `cargo build --release`.
-
-**My device is not listed.**
-Choose *Save diagnostics report* in the tray menu and
-[open a device report](https://github.com/forkacper/battray/issues/new?template=device-report.yml)
-with it attached.
 
 ## Contributing
 
