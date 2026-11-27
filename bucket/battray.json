@@ -1,10 +1,10 @@
 {
-    "version": "0.4.2",
+    "version": "0.4.3",
     "description": "Lightweight tray app that shows the battery level of wireless mice, keyboards and controllers",
     "homepage": "https://github.com/forkacper/battray",
     "license": "MIT",
-    "url": "https://github.com/forkacper/battray/releases/download/v0.4.2/battray.exe",
-    "hash": "0d56998da901dd66acb287ad34c5120bdb8f21d24c2cd53a2b5ffce479ff07c1",
+    "url": "https://github.com/forkacper/battray/releases/download/v0.4.3/battray.exe",
+    "hash": "6ff03ef3ee4b806896a5f05f33aff2f8e54e283668240765041a51b2d685f669",
     "bin": "battray.exe",
     "shortcuts": [
         [
