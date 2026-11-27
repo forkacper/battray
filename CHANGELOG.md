@@ -5,6 +5,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-11-27
+
 ### Added
 
 - Logitech G headsets on their USB dongle: older models such as the G733, G935 and
@@ -86,7 +88,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Sony DualSense and DualSense Edge over Bluetooth and USB.
 - Refresh interval, low battery alerts, start with Windows and a diagnostics report.
 
-[Unreleased]: https://github.com/forkacper/battray/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/forkacper/battray/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/forkacper/battray/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/forkacper/battray/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/forkacper/battray/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/forkacper/battray/compare/v0.3.0...v0.3.1
