@@ -4,6 +4,8 @@
 |---|---|---|---|
 | Logitech PRO X SUPERLIGHT 2 | Lightspeed receiver | HID++ 2.0, feature 0x1004 | Yes |
 | Other Logitech HID++ 2.0 devices | Lightspeed, Unifying or Bolt receiver, USB cable | HID++ 2.0, features 0x1004, 0x1000 or 0x1001 | No |
+| Logitech G headsets (G533, G633, G635, G733, G933, G935, G PRO and PRO X Wireless and more) | USB dongle | HID++ 2.0, feature 0x1F20 battery voltage | No |
+| Logitech centurion headsets (PRO X 2 LIGHTSPEED, PRO X 3 LIGHTSPEED, G522 and more) | USB dongle | Battery feature 0x0104 through the dongle's bridge | No |
 | Sony DualSense, DualSense Edge, DualShock 4 | Bluetooth, USB, Sony wireless adapter | Status byte of the input report | No |
 | Xbox controllers and other XInput gamepads | Xbox Wireless Adapter, Bluetooth | XInput, coarse level (empty, low, medium, full) | No |
 | Keychron K3 Max | 2.4 GHz dongle, Bluetooth, USB cable | Raw HID query, needs the [firmware patch](firmware/keychron) | Yes |

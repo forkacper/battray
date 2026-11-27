@@ -5,6 +5,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- Logitech G headsets on their USB dongle: older models such as the G733, G935 and
+  G PRO X Wireless over HID++, and newer ones such as the PRO X 2 LIGHTSPEED and G522
+  over Logitech's centurion protocol.
+
 ## [0.4.1] - 2026-11-24
 
 ### Added

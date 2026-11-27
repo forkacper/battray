@@ -1,5 +1,6 @@
 //! Logitech devices speaking HID++ 2.0: Lightspeed, Unifying and Bolt receivers,
-//! plus devices connected directly over USB.
+//! devices connected directly over USB, and G series headsets on their USB dongle.
+//! Newer headsets use a different transport, see [`centurion`].
 //!
 //! Protocol notes come from Logitech's published feature specs and the Solaar project.
 //! A request is a long report `[0x11, device index, feature index, function << 4 | swid, params…]`.
@@ -13,10 +14,9 @@ use super::{Battery, ChargeState, DeviceKind, Provider, Reading};
 use crate::hid::{self, Device, DeviceInfo};
 use crate::log;
 
+mod centurion;
+
 const VENDOR_LOGITECH: u16 = 0x046D;
-const USAGE_PAGE_HIDPP: u16 = 0xFF00;
-const USAGE_SHORT: u16 = 0x0001;
-const USAGE_LONG: u16 = 0x0002;
 
 const REPORT_SHORT: u8 = 0x10;
 const REPORT_LONG: u8 = 0x11;
@@ -38,12 +38,21 @@ const FEATURE_DEVICE_NAME: u16 = 0x0005;
 const FEATURE_BATTERY_STATUS: u16 = 0x1000;
 const FEATURE_BATTERY_VOLTAGE: u16 = 0x1001;
 const FEATURE_UNIFIED_BATTERY: u16 = 0x1004;
+/// Battery voltage as read by headsets.
+const FEATURE_ADC_MEASUREMENT: u16 = 0x1F20;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Report {
+    Short,
+    Long,
+}
 
 #[derive(Debug, Clone, Copy)]
 enum BatteryFeature {
     Unified(u8),
     Status(u8),
     Voltage(u8),
+    Adc(u8),
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +66,7 @@ struct Slot {
 pub struct Logitech {
     /// Devices discovered so far, keyed by (receiver parent ID, device index).
     slots: HashMap<(String, u8), Slot>,
+    centurion: centurion::Centurion,
 }
 
 impl Provider for Logitech {
@@ -65,18 +75,12 @@ impl Provider for Logitech {
     }
 
     fn poll(&mut self, hid: &[DeviceInfo], out: &mut Vec<Reading>) {
-        let hidpp = |usage| {
-            move |i: &&DeviceInfo| {
-                i.vendor_id == VENDOR_LOGITECH
-                    && i.usage_page == USAGE_PAGE_HIDPP
-                    && i.usage == usage
-            }
-        };
-        for long in hid.iter().filter(hidpp(USAGE_LONG)) {
-            let short = hid
-                .iter()
-                .filter(hidpp(USAGE_SHORT))
-                .find(|s| !long.parent.is_empty() && s.parent == long.parent);
+        for long in hid.iter().filter(|i| hidpp_report(i) == Some(Report::Long)) {
+            let short = hid.iter().find(|s| {
+                hidpp_report(s) == Some(Report::Short)
+                    && !long.parent.is_empty()
+                    && s.parent == long.parent
+            });
             let channel = match Channel::open(long, short) {
                 Ok(c) => c,
                 Err(e) => {
@@ -90,27 +94,50 @@ impl Provider for Logitech {
                 &long.parent
             };
             // Directly attached devices may answer on any index, so stop once one is found.
-            if !self.poll_slot(&channel, receiver, DIRECT_INDEX, out) {
+            if !self.poll_slot(&channel, receiver, DIRECT_INDEX, &long.product, out) {
                 for index in RECEIVER_INDEXES {
-                    self.poll_slot(&channel, receiver, index, out);
+                    self.poll_slot(&channel, receiver, index, "", out);
                 }
             }
         }
+        self.centurion.poll(hid, out);
+    }
+}
+
+/// Which HID++ report a collection carries, if it is a Logitech HID++ collection.
+fn hidpp_report(info: &DeviceInfo) -> Option<Report> {
+    if info.vendor_id != VENDOR_LOGITECH {
+        return None;
+    }
+    let (short, long) = match info.usage_page {
+        // Receivers and most devices.
+        0xFF00 => (0x0001, 0x0002),
+        // G series headsets. Limited to USB, so Bluetooth devices, whose battery
+        // Windows already reports, are not listed twice.
+        0xFF43 if info.parent.to_ascii_uppercase().starts_with("USB\\") => (0x0201, 0x0202),
+        _ => return None,
+    };
+    match info.usage {
+        u if u == short => Some(Report::Short),
+        u if u == long => Some(Report::Long),
+        _ => None,
     }
 }
 
 impl Logitech {
     /// Reads one device index. Returns whether a HID++ 2.0 device is present there.
+    /// `product` is the USB product name, used when the device does not report its own.
     fn poll_slot(
         &mut self,
         channel: &Channel,
         receiver: &str,
         index: u8,
+        product: &str,
         out: &mut Vec<Reading>,
     ) -> bool {
         let key = (receiver.to_owned(), index);
         if !self.slots.contains_key(&key) {
-            match discover(channel, index) {
+            match discover(channel, index, product) {
                 Ok(Some(slot)) => {
                     log!(
                         "logitech: found \"{}\" at index {index} on {receiver}",
@@ -128,7 +155,7 @@ impl Logitech {
             return false;
         };
         let battery = match read_battery(channel, index, slot.battery) {
-            Ok(b) => Some(b),
+            Ok(b) => b,
             Err(e) => {
                 log!("logitech: battery read for \"{}\" failed: {e}", slot.name);
                 None
@@ -257,19 +284,34 @@ fn match_reply(
 }
 
 /// Probes one device index. `Ok(None)` means there is no battery-powered device there.
-fn discover(channel: &Channel, index: u8) -> Result<Option<Slot>, HidppError> {
+fn discover(channel: &Channel, index: u8, product: &str) -> Result<Option<Slot>, HidppError> {
     let battery = if let Some(i) = channel.feature_index(index, FEATURE_UNIFIED_BATTERY)? {
         BatteryFeature::Unified(i)
     } else if let Some(i) = channel.feature_index(index, FEATURE_BATTERY_STATUS)? {
         BatteryFeature::Status(i)
     } else if let Some(i) = channel.feature_index(index, FEATURE_BATTERY_VOLTAGE)? {
         BatteryFeature::Voltage(i)
+    } else if let Some(i) = channel.feature_index(index, FEATURE_ADC_MEASUREMENT)? {
+        BatteryFeature::Adc(i)
     } else {
         return Ok(None);
     };
     let (name, kind) = match device_name(channel, index) {
         Ok(Some(found)) => found,
-        _ => (format!("Logitech device {index}"), DeviceKind::Other),
+        _ => {
+            let product = product.trim();
+            let name = if product.is_empty() {
+                format!("Logitech device {index}")
+            } else {
+                product.to_owned()
+            };
+            // Only headsets report their battery through feature 0x1F20.
+            let kind = match battery {
+                BatteryFeature::Adc(_) => DeviceKind::Headset,
+                _ => DeviceKind::Other,
+            };
+            (name, kind)
+        }
     };
     Ok(Some(Slot {
         name,
@@ -312,16 +354,19 @@ fn kind_from_type(device_type: u8) -> DeviceKind {
     }
 }
 
+/// `Ok(None)` means the device answered but has no reading, e.g. a headset that is switched off
+/// while its dongle stays plugged in.
 fn read_battery(
     channel: &Channel,
     index: u8,
     feature: BatteryFeature,
-) -> Result<Battery, HidppError> {
-    match feature {
-        BatteryFeature::Unified(f) => Ok(parse_unified(&channel.request(index, f, 0x1, &[])?)),
-        BatteryFeature::Status(f) => Ok(parse_status(&channel.request(index, f, 0x0, &[])?)),
-        BatteryFeature::Voltage(f) => Ok(parse_voltage(&channel.request(index, f, 0x0, &[])?)),
-    }
+) -> Result<Option<Battery>, HidppError> {
+    Ok(match feature {
+        BatteryFeature::Unified(f) => Some(parse_unified(&channel.request(index, f, 0x1, &[])?)),
+        BatteryFeature::Status(f) => Some(parse_status(&channel.request(index, f, 0x0, &[])?)),
+        BatteryFeature::Voltage(f) => Some(parse_voltage(&channel.request(index, f, 0x0, &[])?)),
+        BatteryFeature::Adc(f) => parse_adc(&channel.request(index, f, 0x0, &[])?),
+    })
 }
 
 /// Feature 0x1004 `get_status`: [state of charge %, level flags, charging status, external power].
@@ -371,32 +416,67 @@ fn parse_voltage(p: &[u8; 16]) -> Battery {
         (true, _) => ChargeState::Charging,
     };
     Battery {
-        percent: percent_from_millivolts(millivolts),
+        percent: percent_from_millivolts(&LI_ION_CURVE, millivolts),
         charging,
     }
 }
 
+/// Feature 0x1F20 `get_adc_measurement`: [voltage mV (big endian), flags].
+/// Flag bit 0 says the reading is valid, bit 1 that the battery is charging.
+fn parse_adc(p: &[u8; 16]) -> Option<Battery> {
+    let millivolts = u16::from_be_bytes([p[0], p[1]]);
+    let flags = p[2];
+    if flags & 0x01 == 0 {
+        return None;
+    }
+    let charging = if flags & 0x02 != 0 {
+        ChargeState::Charging
+    } else {
+        ChargeState::Discharging
+    };
+    Some(Battery {
+        percent: percent_from_millivolts(&HEADSET_CURVE, millivolts),
+        charging,
+    })
+}
+
+/// Discharge curve as (mV, %) points, from full to empty.
+type Curve = [(u16, u8)];
+
 /// Typical Li-ion discharge curve, as used by Solaar for voltage-only devices.
-fn percent_from_millivolts(mv: u16) -> u8 {
-    const CURVE: [(u16, u8); 13] = [
-        (4186, 100),
-        (4067, 90),
-        (3989, 80),
-        (3922, 70),
-        (3859, 60),
-        (3811, 50),
-        (3778, 40),
-        (3751, 30),
-        (3717, 20),
-        (3671, 10),
-        (3646, 5),
-        (3579, 2),
-        (3500, 0),
-    ];
-    if mv >= CURVE[0].0 {
+const LI_ION_CURVE: [(u16, u8); 13] = [
+    (4186, 100),
+    (4067, 90),
+    (3989, 80),
+    (3922, 70),
+    (3859, 60),
+    (3811, 50),
+    (3778, 40),
+    (3751, 30),
+    (3717, 20),
+    (3671, 10),
+    (3646, 5),
+    (3579, 2),
+    (3500, 0),
+];
+
+/// G series headsets run their cells lower before switching off than mice do.
+const HEADSET_CURVE: [(u16, u8); 8] = [
+    (4150, 100),
+    (4000, 85),
+    (3900, 70),
+    (3830, 50),
+    (3780, 30),
+    (3740, 20),
+    (3670, 5),
+    (3350, 0),
+];
+
+fn percent_from_millivolts(curve: &Curve, mv: u16) -> u8 {
+    if mv >= curve[0].0 {
         return 100;
     }
-    for pair in CURVE.windows(2) {
+    for pair in curve.windows(2) {
         let [(hi_mv, hi_pct), (lo_mv, lo_pct)] = [pair[0], pair[1]];
         if mv >= lo_mv {
             let span = u32::from(hi_mv - lo_mv);
@@ -445,10 +525,28 @@ mod tests {
 
     #[test]
     fn voltage_curve_interpolates() {
-        assert_eq!(percent_from_millivolts(4200), 100);
-        assert_eq!(percent_from_millivolts(3811), 50);
-        assert_eq!(percent_from_millivolts(3835), 55);
-        assert_eq!(percent_from_millivolts(3400), 0);
+        assert_eq!(percent_from_millivolts(&LI_ION_CURVE, 4200), 100);
+        assert_eq!(percent_from_millivolts(&LI_ION_CURVE, 3811), 50);
+        assert_eq!(percent_from_millivolts(&LI_ION_CURVE, 3835), 55);
+        assert_eq!(percent_from_millivolts(&LI_ION_CURVE, 3400), 0);
+    }
+
+    #[test]
+    fn adc_reads_voltage_and_charging() {
+        // 3830 mV, valid and charging.
+        let b = parse_adc(&params(&[0x0E, 0xF6, 0x03]));
+        assert_eq!(
+            b,
+            Some(Battery {
+                percent: 50,
+                charging: ChargeState::Charging
+            })
+        );
+    }
+
+    #[test]
+    fn adc_without_valid_flag_has_no_reading() {
+        assert_eq!(parse_adc(&params(&[0x0E, 0xF6, 0x00])), None);
     }
 
     #[test]
